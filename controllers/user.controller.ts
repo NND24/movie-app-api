@@ -317,3 +317,75 @@ export const getUserInfo = CatchAsyncError(async (req: Request, res: Response, n
     return next(new ErrorHandler(error.message, 400));
   }
 });
+
+export const addFollowedMovie = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug } = req.body;
+    const user = req.user;
+
+    if (!user) {
+      return next(new ErrorHandler("User not found in request", 400));
+    }
+
+    if (!slug) {
+      return next(new ErrorHandler("Movie slug is required", 400));
+    }
+
+    if (user.followedMovie.includes(slug)) {
+      return next(new ErrorHandler("Movie already followed", 400));
+    }
+
+    user.followedMovie = [...user.followedMovie, slug];
+    await user.save();
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
+
+export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug } = req.body;
+    const user = req.user;
+
+    if (!user) {
+      return next(new ErrorHandler("User not found in request", 400));
+    }
+
+    if (!slug) {
+      return next(new ErrorHandler("Movie slug is required", 400));
+    }
+
+    if (!user.followedMovie.includes(slug)) {
+      return next(new ErrorHandler("Movie not found in followed list", 404));
+    }
+
+    user.followedMovie = user.followedMovie.filter((followedSlug: string) => followedSlug !== slug);
+    await user.save();
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});

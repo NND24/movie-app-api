@@ -20,7 +20,7 @@ export interface User extends Document {
     url: string;
   };
   role: string;
-  followedMovie: Array<{ slug: string }>;
+  followedMovie: string[];
   history: History[];
   refreshToken: string[];
   comparedPassword: (password: string) => Promise<boolean>;
@@ -72,11 +72,7 @@ const userSchema: Schema<User> = new mongoose.Schema(
       type: String,
       default: "user",
     },
-    followedMovie: [
-      {
-        slug: String,
-      },
-    ],
+    followedMovie: [String],
     history: [historySchema],
     refreshToken: [String],
   },
