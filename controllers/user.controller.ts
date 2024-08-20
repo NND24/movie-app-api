@@ -2,8 +2,9 @@ require("dotenv").config();
 import { Request, Response, NextFunction } from "express";
 import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
-import userModel from "../models/user.model";
+import userModel, { User } from "../models/user.model";
 import jwt from "jsonwebtoken";
+import cloudinary from "cloudinary";
 
 export const handleRegister = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -33,8 +34,8 @@ interface LoginRequest {
   password: string;
 }
 
-const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET || "123456789";
-const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET || "123456789";
+const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET as string;
+const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET as string;
 
 export const handleLogin = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -61,7 +62,7 @@ export const handleLogin = CatchAsyncError(async (req: Request, res: Response, n
           id: user._id,
         },
         accessTokenSecret,
-        { expiresIn: "10s" }
+        { expiresIn: "5m" }
       );
 
       const newRefreshToken = jwt.sign({ id: user._id }, refreshTokenSecret, { expiresIn: "24h" });
@@ -152,7 +153,7 @@ export const handleRefreshToken = CatchAsyncError(async (req: Request, res: Resp
         return next(new ErrorHandler("Forbidden: User mismatch", 403));
       }
 
-      const accessToken = jwt.sign({ id: decoded.id }, accessTokenSecret, { expiresIn: "10s" });
+      const accessToken = jwt.sign({ id: decoded.id }, accessTokenSecret, { expiresIn: "5m" });
 
       const newRefreshToken = jwt.sign({ id: foundUser._id }, refreshTokenSecret, { expiresIn: "24h" });
 
@@ -213,7 +214,7 @@ export const socialAuth = CatchAsyncError(async (req: Request, res: Response, ne
           id: newUser._id,
         },
         accessTokenSecret,
-        { expiresIn: "10s" }
+        { expiresIn: "5m" }
       );
       const newRefreshToken = jwt.sign({ id: newUser._id }, refreshTokenSecret, { expiresIn: "24h" });
 
@@ -258,7 +259,7 @@ export const socialAuth = CatchAsyncError(async (req: Request, res: Response, ne
           id: user._id,
         },
         accessTokenSecret,
-        { expiresIn: "10s" }
+        { expiresIn: "5m" }
       );
       const newRefreshToken = jwt.sign({ id: user._id }, refreshTokenSecret, { expiresIn: "24h" });
 
@@ -313,6 +314,136 @@ export const getUserInfo = CatchAsyncError(async (req: Request, res: Response, n
       return next(new ErrorHandler(`User ID ${req.params.id} not found`, 204));
     }
     res.json(user);
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
+
+interface UpdateUserInfo {
+  email?: string;
+  name?: string;
+}
+
+export const updateUserInfo = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name } = req.body as UpdateUserInfo;
+    const userId = req.user?._id;
+    const user = await userModel.findById(userId);
+
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    if (name) {
+      user.name = name;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
+
+interface UpdatePassword {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export const updatePassword = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { oldPassword, newPassword } = req.body as UpdatePassword;
+
+    if (!oldPassword || !newPassword) {
+      return next(new ErrorHandler("Please enter old and new password", 400));
+    }
+
+    const user = await userModel.findById(req.user?._id).select("+password");
+
+    if (user?.password === undefined) {
+      return next(new ErrorHandler("Invalid user", 400));
+    }
+
+    const isCorrectPass = await user.comparedPassword(oldPassword);
+
+    if (!isCorrectPass) {
+      return next(new ErrorHandler("Invalid old password", 400));
+    }
+
+    user.password = newPassword;
+
+    await user.save();
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
+
+interface UpdateAvatar {
+  avatar: string;
+}
+
+export const updateAvatar = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { avatar } = req.body as UpdateAvatar;
+    const userId = req.user._id;
+    const user = await userModel.findById(userId);
+
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    if (avatar) {
+      if (user.avatar?.public_id) {
+        await cloudinary.v2.uploader.destroy(user.avatar.public_id);
+      }
+
+      const myCloud = await cloudinary.v2.uploader.upload(avatar, {
+        folder: "avatars",
+        width: 150,
+      });
+
+      user.avatar = {
+        public_id: myCloud.public_id,
+        url: myCloud.secure_url,
+      };
+    }
+
+    await user.save();
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
   }

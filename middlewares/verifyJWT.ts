@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 require("dotenv").config();
 
-const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET || "123456789";
+const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET as string;
 
 interface CustomRequest extends Request {
   user?: string;

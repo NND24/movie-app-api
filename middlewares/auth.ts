@@ -5,7 +5,7 @@ import { CatchAsyncError } from "./catchAsyncError";
 import userModel from "../models/user.model";
 
 export const isAuthenticated = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-  const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET || "123456789";
+  const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET as string;
   const authHeader = req.headers.authorization || (req.headers.Authorization as string);
 
   if (!authHeader?.startsWith("Bearer ")) {
