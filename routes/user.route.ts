@@ -1,6 +1,7 @@
 import express from "express";
 import {
   addFollowedMovie,
+  addToHistory,
   getUserInfo,
   handleLogin,
   handleLogout,
@@ -20,5 +21,6 @@ userRouter.get("/:id", isAuthenticated, getUserInfo);
 userRouter.post("/social-auth", socialAuth);
 userRouter.put("/addFollowedMovie", isAuthenticated, addFollowedMovie);
 userRouter.put("/removeFollowedMovie", isAuthenticated, removeFollowedMovie);
+userRouter.put("/addToHistory", isAuthenticated, addToHistory);
 
 export default userRouter;

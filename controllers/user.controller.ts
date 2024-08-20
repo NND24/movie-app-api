@@ -389,3 +389,50 @@ export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Res
     return next(new ErrorHandler(error.message, 400));
   }
 });
+
+export const addToHistory = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { movie_slug, ep } = req.body;
+    const user = req.user;
+
+    if (!user) {
+      return next(new ErrorHandler("User not found in request", 400));
+    }
+
+    if (!movie_slug || ep === undefined) {
+      return next(new ErrorHandler("Movie slug and episode number are required", 400));
+    }
+
+    const historyEntry = user.history.find((item) => item.movie_slug === movie_slug);
+
+    if (historyEntry) {
+      historyEntry.lasted_ep = Math.max(historyEntry.lasted_ep, ep);
+
+      if (!historyEntry.watched_eps.includes(ep)) {
+        historyEntry.watched_eps.push(ep);
+      }
+    } else {
+      user.history.push({
+        movie_slug,
+        lasted_ep: ep,
+        watched_eps: [ep],
+      });
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        followedMovie: user.followedMovie,
+        history: user.history,
+      },
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 400));
+  }
+});
