@@ -11,11 +11,11 @@ export const getComment = CatchAsyncError(async (req: Request, res: Response, ne
       .findOne({ slug })
       .populate({
         path: "comments.user",
-        select: "name email avatar",
+        select: "_id name email avatar",
       })
       .populate({
         path: "comments.commentReplies.user",
-        select: "name email avatar",
+        select: "_id name email avatar",
       });
 
     if (!movieComment) {
@@ -95,6 +95,81 @@ export const addAnswer = CatchAsyncError(async (req: Request, res: Response, nex
     res.status(200).json({
       success: true,
       movie,
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+interface DeleteCommentData {
+  slug: string;
+  commentId: string;
+}
+
+export const deleteComment = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug, commentId } = req.body as DeleteCommentData;
+
+    const movie = await movieModel.findOne({ slug });
+
+    if (!movie) {
+      return next(new ErrorHandler("Movie not found", 404));
+    }
+
+    const commentIndex = movie.comments.findIndex((item) => item._id.equals(commentId));
+
+    if (commentIndex === -1) {
+      return next(new ErrorHandler("Comment not found", 404));
+    }
+
+    movie.comments.splice(commentIndex, 1);
+
+    await movie.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Comment deleted successfully",
+    });
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+interface DeleteReplyData {
+  slug: string;
+  commentId: string;
+  replyId: string;
+}
+
+export const deleteReply = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug, commentId, replyId } = req.body as DeleteReplyData;
+
+    const movie = await movieModel.findOne({ slug });
+
+    if (!movie) {
+      return next(new ErrorHandler("Movie not found", 404));
+    }
+
+    const comment = movie.comments.find((item) => item._id.equals(commentId));
+
+    if (!comment) {
+      return next(new ErrorHandler("Comment not found", 404));
+    }
+
+    const replyIndex = comment.commentReplies.findIndex((item) => item._id.equals(replyId));
+
+    if (replyIndex === -1) {
+      return next(new ErrorHandler("Reply not found", 404));
+    }
+
+    comment.commentReplies.splice(replyIndex, 1);
+
+    await movie.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Reply deleted successfully",
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 500));

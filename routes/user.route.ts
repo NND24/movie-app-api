@@ -14,6 +14,7 @@ import {
   updateUserInfo,
 } from "../controllers/user.controller";
 import { isAuthenticated } from "../middlewares/auth";
+import { deleteComment, deleteReply } from "../controllers/movie.controller";
 const userRouter = express.Router();
 
 userRouter.post("/register", handleRegister);
@@ -28,5 +29,7 @@ userRouter.put("/update-user-avatar", isAuthenticated, updateAvatar);
 userRouter.put("/addFollowedMovie", isAuthenticated, addFollowedMovie);
 userRouter.put("/removeFollowedMovie", isAuthenticated, removeFollowedMovie);
 userRouter.put("/addToHistory", isAuthenticated, addToHistory);
+userRouter.delete("/comment", isAuthenticated, deleteComment);
+userRouter.delete("/comment/reply", isAuthenticated, deleteReply);
 
 export default userRouter;
