@@ -340,6 +340,14 @@ export const updateUserInfo = CatchAsyncError(async (req: Request, res: Response
 
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -350,6 +358,7 @@ export const updateUserInfo = CatchAsyncError(async (req: Request, res: Response
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
@@ -385,6 +394,14 @@ export const updatePassword = CatchAsyncError(async (req: Request, res: Response
 
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(201).json({
       user: {
         id: user._id,
@@ -395,6 +412,7 @@ export const updatePassword = CatchAsyncError(async (req: Request, res: Response
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
@@ -433,6 +451,14 @@ export const updateAvatar = CatchAsyncError(async (req: Request, res: Response, 
 
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(201).json({
       user: {
         id: user._id,
@@ -443,6 +469,7 @@ export const updateAvatar = CatchAsyncError(async (req: Request, res: Response, 
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
@@ -469,6 +496,14 @@ export const addFollowedMovie = CatchAsyncError(async (req: Request, res: Respon
     user.followedMovie = [...user.followedMovie, slug];
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -479,6 +514,7 @@ export const addFollowedMovie = CatchAsyncError(async (req: Request, res: Respon
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
@@ -505,6 +541,14 @@ export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Res
     user.followedMovie = user.followedMovie.filter((followedSlug: string) => followedSlug !== slug);
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -515,6 +559,7 @@ export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Res
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
@@ -552,6 +597,14 @@ export const addToHistory = CatchAsyncError(async (req: Request, res: Response, 
 
     await user.save();
 
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+      },
+      accessTokenSecret,
+      { expiresIn: "5m" }
+    );
+
     res.status(200).json({
       user: {
         id: user._id,
@@ -562,6 +615,7 @@ export const addToHistory = CatchAsyncError(async (req: Request, res: Response, 
         followedMovie: user.followedMovie,
         history: user.history,
       },
+      accessToken,
     });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
