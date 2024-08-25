@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
-import movieModel, { CommentReply } from "../models/movie.model";
+import movieModel, { CommentReply, Movie } from "../models/movie.model";
 
 export const getComment = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -44,7 +44,7 @@ export const addComment = CatchAsyncError(async (req: Request, res: Response, ne
     }
 
     const newComment: any = {
-      user: req.user._id,
+      user: req?.user?._id,
       comment,
       commentReplies: [],
     };
@@ -77,18 +77,18 @@ export const addAnswer = CatchAsyncError(async (req: Request, res: Response, nex
       return next(new ErrorHandler("Movie not found", 404));
     }
 
-    const comment = movie.comments.find((item) => item._id.equals(commentId));
+    const comment = movie.comments.find((item) => item._id.toString() === commentId);
 
     if (!comment) {
       return next(new ErrorHandler("Invalid Comment ID", 400));
     }
 
-    const newAnswer: Partial<CommentReply> = {
-      user: req.user._id,
+    const newAnswer: any = {
+      user: req?.user?._id,
       comment: answer,
     };
 
-    comment.commentReplies.push(newAnswer as CommentReply);
+    comment.commentReplies.push(newAnswer);
 
     await movie.save();
 
@@ -145,7 +145,7 @@ export const deleteReply = CatchAsyncError(async (req: Request, res: Response, n
   try {
     const { slug, commentId, replyId } = req.body as DeleteReplyData;
 
-    const movie = await movieModel.findOne({ slug });
+    const movie = (await movieModel.findOne({ slug })) as Movie | null;
 
     if (!movie) {
       return next(new ErrorHandler("Movie not found", 404));

@@ -26,7 +26,7 @@ export interface User extends Document {
   comparedPassword: (password: string) => Promise<boolean>;
 }
 
-const historySchema: Schema<History> = new mongoose.Schema({
+export const historySchema: Schema<History> = new mongoose.Schema({
   movie_slug: {
     type: String,
     required: true,

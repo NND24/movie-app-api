@@ -14,23 +14,48 @@ export const isAuthenticated = CatchAsyncError(async (req: Request, res: Respons
 
   const token = authHeader.split(" ")[1];
   if (token) {
-    jwt.verify(token, accessTokenSecret, async (err, decoded) => {
+    jwt.verify(token, accessTokenSecret, async (err, decoded: any) => {
       if (err) {
         return next(new ErrorHandler("Forbidden: Invalid token", 403));
       }
-      const user = await userModel.findById(decoded?.id);
-      req.user = user;
-      next();
+
+      if (decoded?.id) {
+        const user = await userModel.findById(decoded.id);
+        if (user) {
+          req.user = user;
+          next();
+        } else {
+          return next(new ErrorHandler("User not found", 404));
+        }
+      } else {
+        return next(new ErrorHandler("Invalid token payload", 403));
+      }
     });
+  } else {
+    return next(new ErrorHandler("Token not provided", 401));
   }
 });
 
 export const isAdmin = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-  const { email } = req.user;
-  const adminUser = await userModel.findOne({ email });
-  if (adminUser.role !== "admin") {
-    return next(new ErrorHandler("You are not an admin", 401));
-  } else {
-    next();
+  if (!req.user) {
+    return next(new ErrorHandler("User not authenticated", 401));
   }
+
+  const { email } = req.user;
+
+  if (!email) {
+    return next(new ErrorHandler("User email not found", 401));
+  }
+
+  const adminUser = await userModel.findOne({ email });
+
+  if (!adminUser) {
+    return next(new ErrorHandler("User not found", 404));
+  }
+
+  if (adminUser.role !== "admin") {
+    return next(new ErrorHandler("You are not an admin", 403)); // 403 is more appropriate for authorization errors
+  }
+
+  next();
 });

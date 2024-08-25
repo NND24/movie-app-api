@@ -426,7 +426,7 @@ interface UpdateAvatar {
 export const updateAvatar = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { avatar } = req.body as UpdateAvatar;
-    const userId = req.user._id;
+    const userId = req.user?._id;
     const user = await userModel.findById(userId);
 
     if (!user) {
@@ -566,9 +566,14 @@ export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Res
   }
 });
 
+interface addToHistoryBody {
+  movie_slug: string;
+  ep: string;
+}
+
 export const addToHistory = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { movie_slug, ep } = req.body;
+    const { movie_slug, ep } = req.body as addToHistoryBody;
     const user = req.user;
 
     if (!user) {
@@ -582,14 +587,14 @@ export const addToHistory = CatchAsyncError(async (req: Request, res: Response, 
     const historyEntry = user.history.find((item) => item.movie_slug === movie_slug);
 
     if (historyEntry) {
-      historyEntry.lasted_ep = Math.max(historyEntry.lasted_ep, ep);
+      historyEntry.lasted_ep = Math.max(Number(historyEntry.lasted_ep), Number(ep));
 
       if (!historyEntry.watched_eps.includes(ep)) {
         historyEntry.watched_eps.push(ep);
       }
     } else {
       user.history.push({
-        movie_slug,
+        movie_slug: movie_slug,
         lasted_ep: ep,
         watched_eps: [ep],
       });

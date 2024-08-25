@@ -1,0 +1,25 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const user_controller_1 = require("../controllers/user.controller");
+const auth_1 = require("../middlewares/auth");
+const movie_controller_1 = require("../controllers/movie.controller");
+const userRouter = express_1.default.Router();
+userRouter.post("/register", user_controller_1.handleRegister);
+userRouter.post("/login", user_controller_1.handleLogin);
+userRouter.get("/logout", auth_1.isAuthenticated, user_controller_1.handleLogout);
+userRouter.get("/refresh", user_controller_1.handleRefreshToken);
+userRouter.get("/:id", auth_1.isAuthenticated, user_controller_1.getUserInfo);
+userRouter.post("/social-auth", user_controller_1.socialAuth);
+userRouter.put("/update-user-info", auth_1.isAuthenticated, user_controller_1.updateUserInfo);
+userRouter.put("/update-user-password", auth_1.isAuthenticated, user_controller_1.updatePassword);
+userRouter.put("/update-user-avatar", auth_1.isAuthenticated, user_controller_1.updateAvatar);
+userRouter.put("/addFollowedMovie", auth_1.isAuthenticated, user_controller_1.addFollowedMovie);
+userRouter.put("/removeFollowedMovie", auth_1.isAuthenticated, user_controller_1.removeFollowedMovie);
+userRouter.put("/addToHistory", auth_1.isAuthenticated, user_controller_1.addToHistory);
+userRouter.delete("/comment", auth_1.isAuthenticated, movie_controller_1.deleteComment);
+userRouter.delete("/comment/reply", auth_1.isAuthenticated, movie_controller_1.deleteReply);
+exports.default = userRouter;

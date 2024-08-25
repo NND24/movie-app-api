@@ -1,13 +1,15 @@
-import mongoose, { Document, Model, Schema } from "mongoose";
+import mongoose, { Document, Model, ObjectId, Schema } from "mongoose";
 import { User } from "./user.model";
 
 export interface CommentReply extends Document {
-  user: User;
+  _id: mongoose.Types.ObjectId;
+  user: mongoose.Types.ObjectId;
   comment: string;
 }
 
 export interface Comment extends Document {
-  user: User;
+  _id: mongoose.Types.ObjectId;
+  user: ObjectId;
   comment: string;
   commentReplies: CommentReply[];
 }
