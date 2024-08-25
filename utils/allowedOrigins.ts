@@ -1,1 +1,1 @@
-export const allowedOrigins = ["http://localhost:5173"];
+export const allowedOrigins = ["https://dmovie-seven.vercel.app", "http://localhost:5173"];
