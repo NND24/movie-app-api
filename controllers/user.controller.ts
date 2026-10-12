@@ -101,6 +101,8 @@ export const handleLogin = CatchAsyncError(async (req: Request, res: Response, n
           role: user.role,
           followedMovie: user.followedMovie,
           history: user.history,
+          followedManga: user.followedManga,
+          mangaHistory: user.mangaHistory,
         },
         accessToken,
       });
@@ -251,6 +253,8 @@ export const socialAuth = CatchAsyncError(async (req: Request, res: Response, ne
         role: newUser.role,
         followedMovie: newUser.followedMovie,
         history: newUser.history,
+        followedManga: newUser.followedManga,
+        mangaHistory: newUser.mangaHistory,
         accessToken,
       });
     } else {
@@ -296,6 +300,8 @@ export const socialAuth = CatchAsyncError(async (req: Request, res: Response, ne
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
         accessToken,
       });
     }
@@ -357,6 +363,8 @@ export const updateUserInfo = CatchAsyncError(async (req: Request, res: Response
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });
@@ -411,6 +419,8 @@ export const updatePassword = CatchAsyncError(async (req: Request, res: Response
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });
@@ -468,6 +478,8 @@ export const updateAvatar = CatchAsyncError(async (req: Request, res: Response, 
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });
@@ -513,6 +525,8 @@ export const addFollowedMovie = CatchAsyncError(async (req: Request, res: Respon
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });
@@ -558,6 +572,8 @@ export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Res
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });
@@ -619,6 +635,8 @@ export const addToHistory = CatchAsyncError(async (req: Request, res: Response, 
         role: user.role,
         followedMovie: user.followedMovie,
         history: user.history,
+        followedManga: user.followedManga,
+        mangaHistory: user.mangaHistory,
       },
       accessToken,
     });

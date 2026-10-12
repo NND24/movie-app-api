@@ -10,6 +10,25 @@ export interface History extends Document {
   watched_eps: string[];
 }
 
+// Manga come from MangaDex; title and cover are stored so lists render without extra requests.
+export interface FollowedManga {
+  manga_id: string;
+  title: string;
+  cover: string;
+  followed_at: Date;
+}
+
+export interface MangaHistory {
+  manga_id: string;
+  title: string;
+  cover: string;
+  chapter_id: string;
+  chapter_label: string;
+  lang: string;
+  read_chapters: string[];
+  updated_at: Date;
+}
+
 export interface User extends Document {
   _id: string;
   name: string;
@@ -22,6 +41,8 @@ export interface User extends Document {
   role: string;
   followedMovie: string[];
   history: History[];
+  followedManga: FollowedManga[];
+  mangaHistory: MangaHistory[];
   refreshToken: string[];
   comparedPassword: (password: string) => Promise<boolean>;
 }
@@ -41,6 +62,30 @@ export const historySchema: Schema<History> = new mongoose.Schema({
     },
   ],
 });
+
+const followedMangaSchema = new mongoose.Schema<FollowedManga>(
+  {
+    manga_id: { type: String, required: true },
+    title: { type: String, default: "" },
+    cover: { type: String, default: "" },
+    followed_at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const mangaHistorySchema = new mongoose.Schema<MangaHistory>(
+  {
+    manga_id: { type: String, required: true },
+    title: { type: String, default: "" },
+    cover: { type: String, default: "" },
+    chapter_id: { type: String, required: true },
+    chapter_label: { type: String, default: "" },
+    lang: { type: String, default: "" },
+    read_chapters: [{ type: String }],
+    updated_at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
 
 const userSchema: Schema<User> = new mongoose.Schema(
   {
@@ -74,6 +119,8 @@ const userSchema: Schema<User> = new mongoose.Schema(
     },
     followedMovie: [String],
     history: [historySchema],
+    followedManga: [followedMangaSchema],
+    mangaHistory: [mangaHistorySchema],
     refreshToken: [String],
   },
   { timestamps: true }
