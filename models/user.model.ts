@@ -39,6 +39,10 @@ export interface User extends Document {
     url: string;
   };
   role: string;
+  // Locked by an admin: cannot log in or use authenticated endpoints.
+  banned: boolean;
+  bannedReason: string;
+  bannedAt?: Date;
   followedMovie: string[];
   history: History[];
   followedManga: FollowedManga[];
@@ -117,6 +121,9 @@ const userSchema: Schema<User> = new mongoose.Schema(
       type: String,
       default: "user",
     },
+    banned: { type: Boolean, default: false },
+    bannedReason: { type: String, default: "" },
+    bannedAt: { type: Date },
     followedMovie: [String],
     history: [historySchema],
     followedManga: [followedMangaSchema],
@@ -127,8 +134,9 @@ const userSchema: Schema<User> = new mongoose.Schema(
 );
 
 userSchema.pre<User>("save", async function (next) {
-  if (!this.isModified("password")) {
-    next();
+  // Only hash a new password (otherwise every save would hash the stored hash again).
+  if (!this.isModified("password") || !this.password) {
+    return next();
   }
   this.password = await bcrypt.hash(this.password, 10);
   next();

@@ -7,6 +7,9 @@ import jwt from "jsonwebtoken";
 import cloudinary from "cloudinary";
 import { sendUser } from "./manga.controller";
 
+export const bannedMessage = (reason?: string) =>
+  `Tài khoản đã bị khóa${reason ? `: ${reason}` : ""}. Liên hệ quản trị viên nếu bạn cho rằng đây là nhầm lẫn.`;
+
 export const handleRegister = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, email, password } = req.body;
@@ -57,6 +60,8 @@ export const handleLogin = CatchAsyncError(async (req: Request, res: Response, n
 
     if (!isCorrectPass) {
       return next(new ErrorHandler("Invalid email or password", 400));
+    } else if (user.banned) {
+      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
     } else {
       const accessToken = jwt.sign(
         {
@@ -141,6 +146,12 @@ export const handleRefreshToken = CatchAsyncError(async (req: Request, res: Resp
       });
 
       return next(new ErrorHandler("Forbidden: Refresh token not found", 403));
+    }
+
+    if (foundUser.banned) {
+      foundUser.refreshToken = [];
+      await foundUser.save();
+      return next(new ErrorHandler(bannedMessage(foundUser.bannedReason), 403));
     }
 
     const newRefreshTokenArray = foundUser.refreshToken.filter((rt) => rt !== refreshToken);
@@ -258,6 +269,8 @@ export const socialAuth = CatchAsyncError(async (req: Request, res: Response, ne
         mangaHistory: newUser.mangaHistory,
         accessToken,
       });
+    } else if (user.banned) {
+      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
     } else {
       const accessToken = jwt.sign(
         {

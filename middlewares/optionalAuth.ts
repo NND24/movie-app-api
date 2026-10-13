@@ -11,7 +11,7 @@ export const optionalAuth = async (req: Request, _res: Response, next: NextFunct
     const decoded = jwt.verify(authHeader.split(" ")[1], process.env.ACCESS_TOKEN_SECRET as string) as { id?: string };
     if (decoded?.id) {
       const user = await userModel.findById(decoded.id);
-      if (user) req.user = user;
+      if (user && !user.banned) req.user = user;
     }
   } catch {
     // Invalid or expired token: continue as a guest.

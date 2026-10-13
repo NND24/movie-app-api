@@ -21,7 +21,9 @@ export const isAuthenticated = CatchAsyncError(async (req: Request, res: Respons
 
       if (decoded?.id) {
         const user = await userModel.findById(decoded.id);
-        if (user) {
+        if (user?.banned) {
+          return next(new ErrorHandler("Tài khoản đã bị khóa", 403));
+        } else if (user) {
           req.user = user;
           next();
         } else {
