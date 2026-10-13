@@ -8,7 +8,7 @@ const MAX_MANGA_HISTORY = 100;
 const MAX_READ_CHAPTERS = 2000;
 
 // Same response shape as the other user endpoints, so the client can refresh its stored user.
-const sendUser = (res: Response, user: User) => {
+export const sendUser = (res: Response, user: User) => {
   const accessToken = jwt.sign({ id: user._id }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: "5m" });
   res.status(200).json({
     user: {

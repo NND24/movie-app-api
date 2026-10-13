@@ -21,6 +21,7 @@ import {
   removeFollowedManga,
   removeMangaHistory,
 } from "../controllers/manga.controller";
+import { removeFromHistory } from "../controllers/history.controller";
 const userRouter = express.Router();
 
 userRouter.post("/register", handleRegister);
@@ -35,6 +36,7 @@ userRouter.put("/update-user-avatar", isAuthenticated, updateAvatar);
 userRouter.put("/addFollowedMovie", isAuthenticated, addFollowedMovie);
 userRouter.put("/removeFollowedMovie", isAuthenticated, removeFollowedMovie);
 userRouter.put("/addToHistory", isAuthenticated, addToHistory);
+userRouter.put("/removeFromHistory", isAuthenticated, removeFromHistory);
 userRouter.put("/addFollowedManga", isAuthenticated, addFollowedManga);
 userRouter.put("/removeFollowedManga", isAuthenticated, removeFollowedManga);
 userRouter.put("/addToMangaHistory", isAuthenticated, addToMangaHistory);
