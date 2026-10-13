@@ -17,6 +17,7 @@ export interface Comment extends Document {
 export interface Movie extends Document {
   slug: string;
   comments: Comment[];
+  commentsMigrated: boolean;
 }
 
 const commentReplySchema = new Schema<CommentReply>(
@@ -56,6 +57,8 @@ const movieSchema = new Schema<Movie>({
     required: true,
   },
   comments: [commentSchema],
+  // Set once these embedded comments were copied to the MovieComment collection.
+  commentsMigrated: { type: Boolean, default: false },
 });
 
 const movieModel: Model<Movie> = mongoose.model("Movie", movieSchema);

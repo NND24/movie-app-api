@@ -3,6 +3,14 @@ import { isAuthenticated } from "../middlewares/auth";
 import { addAnswer, addComment, getComment } from "../controllers/movie.controller";
 import { getReactions, likeMovie, rateMovie } from "../controllers/reaction.controller";
 import { optionalAuth } from "../middlewares/optionalAuth";
+import {
+  createComment,
+  likeComment,
+  listComments,
+  moderateComment,
+  removeComment,
+  reportComment,
+} from "../controllers/comment.controller";
 const movieRouter = express.Router();
 
 movieRouter.get("/get-comment/:slug", getComment);
@@ -11,5 +19,11 @@ movieRouter.put("/add-answer", isAuthenticated, addAnswer);
 movieRouter.get("/reactions/:slug", optionalAuth, getReactions);
 movieRouter.put("/rate-movie", isAuthenticated, rateMovie);
 movieRouter.put("/like-movie", isAuthenticated, likeMovie);
+movieRouter.get("/comments/:slug", optionalAuth, listComments);
+movieRouter.post("/comments", isAuthenticated, createComment);
+movieRouter.put("/comments/:id/like", isAuthenticated, likeComment);
+movieRouter.post("/comments/:id/report", isAuthenticated, reportComment);
+movieRouter.put("/comments/:id/moderate", isAuthenticated, moderateComment);
+movieRouter.delete("/comments/:id", isAuthenticated, removeComment);
 
 export default movieRouter;

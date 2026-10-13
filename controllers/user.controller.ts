@@ -5,6 +5,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import userModel, { User } from "../models/user.model";
 import jwt from "jsonwebtoken";
 import cloudinary from "cloudinary";
+import { sendUser } from "./manga.controller";
 
 export const handleRegister = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -537,11 +538,19 @@ export const addFollowedMovie = CatchAsyncError(async (req: Request, res: Respon
 
 export const removeFollowedMovie = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slug } = req.body;
+    const { slug, slugs } = req.body;
     const user = req.user;
 
     if (!user) {
       return next(new ErrorHandler("User not found in request", 400));
+    }
+
+    // Several at once: { slugs: string[] } (e.g. movies no longer on the source).
+    if (Array.isArray(slugs)) {
+      const remove = slugs.filter((s: unknown) => typeof s === "string");
+      user.followedMovie = user.followedMovie.filter((followedSlug: string) => !remove.includes(followedSlug));
+      await user.save();
+      return sendUser(res, user);
     }
 
     if (!slug) {
