@@ -6,6 +6,7 @@ import movieRouter from "./routes/movie.route";
 import userRouter from "./routes/user.route";
 import adminRouter from "./routes/admin.route";
 import progressRouter from "./routes/progress.route";
+import playlistRouter from "./routes/playlist.route";
 import { corsOptions } from "./utils/corsOptions";
 import { credentials } from "./middlewares/credentials";
 require("dotenv").config();
@@ -17,7 +18,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
 // userRouter last: its GET /:id would match /admin, /progress...
-app.use("/api/v1", adminRouter, progressRouter, movieRouter, userRouter);
+app.use("/api/v1", adminRouter, progressRouter, playlistRouter, movieRouter, userRouter);
 
 app.all("*", (req: Request, res: Response, next: NextFunction) => {
   const err = new Error(`Route ${req.originalUrl} not found`) as any;
