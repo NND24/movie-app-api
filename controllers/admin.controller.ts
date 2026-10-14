@@ -7,6 +7,7 @@ import movieCommentModel from "../models/movieComment.model";
 import movieReactionModel from "../models/movieReaction.model";
 import playlistModel from "../models/playlist.model";
 import watchProgressModel from "../models/watchProgress.model";
+import pushSubscriptionModel from "../models/pushSubscription.model";
 
 // All handlers here run behind isAuthenticated + isAdmin (see routes/admin.route.ts).
 
@@ -192,6 +193,7 @@ export const deleteUser = CatchAsyncError(async (req: Request, res: Response, ne
       movieReactionModel.deleteMany({ user: user._id }),
       playlistModel.deleteMany({ owner: user._id }),
       watchProgressModel.deleteMany({ user: user._id }),
+      pushSubscriptionModel.deleteMany({ user: user._id }),
       // Their likes on other comments.
       movieCommentModel.updateMany({ likes: user._id }, { $pull: { likes: user._id }, $inc: { likeCount: -1 } }),
       userModel.deleteOne({ _id: user._id }),

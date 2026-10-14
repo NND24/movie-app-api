@@ -9,6 +9,7 @@ import {
   setUserBanned,
   setUserRole,
 } from "../controllers/admin.controller";
+import { adminCheck, adminLastReport } from "../controllers/push.controller";
 
 const adminRouter = express.Router();
 
@@ -22,5 +23,7 @@ adminRouter.put("/admin/users/:id/ban", setUserBanned);
 adminRouter.delete("/admin/users/:id", deleteUser);
 adminRouter.get("/admin/comments", listComments);
 adminRouter.put("/admin/comments/bulk", bulkModerateComments);
+adminRouter.get("/admin/push/check", adminLastReport);
+adminRouter.post("/admin/push/check", adminCheck);
 
 export default adminRouter;

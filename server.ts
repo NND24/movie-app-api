@@ -1,5 +1,6 @@
 import { app } from "./app";
 import connectDB from "./utils/connectDB";
+import { startReleaseChecker } from "./utils/releaseChecker";
 require("dotenv").config();
 import { v2 as cloudinary } from "cloudinary";
 
@@ -18,3 +19,6 @@ const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
+
+// New episodes / chapters of followed titles -> push notifications.
+startReleaseChecker();
