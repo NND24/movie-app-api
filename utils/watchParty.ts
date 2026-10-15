@@ -1,4 +1,7 @@
-// watch-party rooms over socket.io. The movie player is an embedded iframe whose
+// "Xem cùng nhau" / "Đọc cùng nhau": watch-party and read-together rooms over socket.io.
+// Manga rooms (kind "manga": slug = manga id, episode = chapter id) also share where each member
+// is reading (page), since the reader is our own page.
+// The movie player is an embedded iframe whose
 // playback can't be controlled, so a room doesn't sync seeking; it gives friends a shared chat for
 // an episode, ready checks, and a 3-2-1 countdown (timed by the server clock) to press play together.
 // Rooms live in memory: they disappear when the server restarts or shortly after everyone leaves.
@@ -22,6 +25,9 @@ interface Member {
   name: string;
   avatar: string;
   ready: boolean;
+  // Manga rooms: page being read (0-based) out of total.
+  page: number;
+  total: number;
   // Open tabs of this user in the room (one member per user).
   sockets: Set<string>;
 }
@@ -38,6 +44,7 @@ export interface ChatMessage {
 
 interface Room {
   code: string;
+  kind: "movie" | "manga";
   hostId: string;
   slug: string;
   episode: string;
@@ -66,12 +73,13 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 
 const snapshot = (room: Room) => ({
   code: room.code,
+  kind: room.kind,
   hostId: room.hostId,
   slug: room.slug,
   episode: room.episode,
   movieName: room.movieName,
   poster: room.poster,
-  members: [...room.members.values()].map((m) => ({ userId: m.userId, name: m.name, avatar: m.avatar, ready: m.ready })),
+  members: [...room.members.values()].map((m) => ({ userId: m.userId, name: m.name, avatar: m.avatar, ready: m.ready, page: m.page, total: m.total })),
   messages: room.messages,
   countdownAt: room.countdownAt && room.countdownAt > Date.now() - 3000 ? room.countdownAt : null,
   serverTime: Date.now(),
@@ -135,6 +143,7 @@ export const attachWatchParty = (server: HttpServer) => {
     const currentRoom = () => (socket.data.room ? rooms.get(socket.data.room) : undefined);
     let lastMessageAt = 0;
     let lastReactionAt = 0;
+    let lastPositionAt = 0;
 
     const join = (room: Room, ack: (res: unknown) => void) => {
       const old = currentRoom();
@@ -142,7 +151,7 @@ export const attachWatchParty = (server: HttpServer) => {
       let member = room.members.get(me.userId);
       if (!member) {
         if (room.members.size >= MAX_MEMBERS) return ack({ error: `Phòng đã đủ ${MAX_MEMBERS} người` });
-        member = { ...me, ready: false, sockets: new Set() };
+        member = { ...me, ready: false, page: 0, total: 0, sockets: new Set() };
         room.members.set(me.userId, member);
         if (room.members.size > 1) systemMessage(room, `${me.name} đã vào phòng.`);
       }
@@ -162,6 +171,7 @@ export const attachWatchParty = (server: HttpServer) => {
       if (!slug || !episode) return ack({ error: "Thiếu thông tin phim" });
       const room: Room = {
         code: newCode(),
+        kind: payload?.kind === "manga" ? "manga" : "movie",
         hostId: me.userId,
         slug,
         episode,
@@ -175,7 +185,7 @@ export const attachWatchParty = (server: HttpServer) => {
       };
       rooms.set(room.code, room);
       join(room, ack);
-      systemMessage(room, `${me.name} đã tạo phòng. Gửi link cho bạn bè để xem cùng nhé!`);
+      systemMessage(room, `${me.name} đã tạo phòng. Gửi link cho bạn bè để ${room.kind === "manga" ? "đọc" : "xem"} cùng nhé!`);
     });
 
     socket.on("room:join", (payload, ack = () => undefined) => {
@@ -210,6 +220,18 @@ export const attachWatchParty = (server: HttpServer) => {
       io.to(room.code).emit("chat:reaction", { emoji: payload.emoji, name: me.name, at: Date.now() });
     });
 
+    // Manga rooms: the page this member is on (sent while scrolling, at most ~3 times a second).
+    socket.on("member:position", (payload) => {
+      const room = currentRoom();
+      const member = room?.members.get(me.userId);
+      if (!room || !member || Date.now() - lastPositionAt < 300) return;
+      lastPositionAt = Date.now();
+      const total = Math.max(0, Math.min(2000, Math.floor(Number(payload?.total) || 0)));
+      member.total = total;
+      member.page = Math.max(0, Math.min(total, Math.floor(Number(payload?.page) || 0)));
+      io.to(room.code).emit("member:position", { userId: me.userId, page: member.page, total: member.total });
+    });
+
     socket.on("member:ready", (payload) => {
       const room = currentRoom();
       const member = room?.members.get(me.userId);
@@ -241,8 +263,12 @@ export const attachWatchParty = (server: HttpServer) => {
       if (room.episode === episode) return ack({ ok: true });
       room.episode = episode;
       room.countdownAt = null;
-      room.members.forEach((m) => (m.ready = false));
-      systemMessage(room, `${me.name} chuyển cả phòng sang tập ${episode}.`);
+      room.members.forEach((m) => {
+        m.ready = false;
+        m.page = 0;
+      });
+      const label = str(payload?.label, 100);
+      systemMessage(room, room.kind === "manga" ? `${me.name} chuyển cả phòng sang ${label || "chương khác"}.` : `${me.name} chuyển cả phòng sang tập ${episode}.`);
       broadcastMembers(room);
       ack({ ok: true });
     });
