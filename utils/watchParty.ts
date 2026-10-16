@@ -53,6 +53,8 @@ interface Room {
   members: Map<string, Member>;
   messages: ChatMessage[];
   countdownAt: number | null;
+  // Host's player (when it is ours, e.g. Internet Archive copies): position at server time "at".
+  player: { playing: boolean; position: number; at: number; episode: string } | null;
   emptySince: number | null;
   createdAt: number;
 }
@@ -82,6 +84,7 @@ const snapshot = (room: Room) => ({
   members: [...room.members.values()].map((m) => ({ userId: m.userId, name: m.name, avatar: m.avatar, ready: m.ready, page: m.page, total: m.total })),
   messages: room.messages,
   countdownAt: room.countdownAt && room.countdownAt > Date.now() - 3000 ? room.countdownAt : null,
+  player: room.player && room.player.episode === room.episode ? room.player : null,
   serverTime: Date.now(),
 });
 
@@ -180,6 +183,7 @@ export const attachWatchParty = (server: HttpServer) => {
         members: new Map(),
         messages: [],
         countdownAt: null,
+        player: null,
         emptySince: null,
         createdAt: Date.now(),
       };
@@ -263,6 +267,7 @@ export const attachWatchParty = (server: HttpServer) => {
       if (room.episode === episode) return ack({ ok: true });
       room.episode = episode;
       room.countdownAt = null;
+      room.player = null;
       room.members.forEach((m) => {
         m.ready = false;
         m.page = 0;
@@ -271,6 +276,35 @@ export const attachWatchParty = (server: HttpServer) => {
       systemMessage(room, room.kind === "manga" ? `${me.name} chuyển cả phòng sang ${label || "chương khác"}.` : `${me.name} chuyển cả phòng sang tập ${episode}.`);
       broadcastMembers(room);
       ack({ ok: true });
+    });
+
+    // Host only: play / pause / seek (and a heartbeat while playing) of our own player; the others
+    // follow it. "event" is a deliberate action, "tick" the heartbeat (drift correction only).
+    // At most one relay per 200 ms, but never dropping the last state: a pause/seek/play burst
+    // ends with the newest state sent (an event wins over a heartbeat in the same window).
+    let lastPlayerAt = 0;
+    let pendingPlayer: { payload: any; timer: NodeJS.Timeout } | null = null;
+    const relayPlayer = (payload: any) => {
+      const room = currentRoom();
+      if (!room || room.kind !== "movie" || room.hostId !== me.userId) return;
+      lastPlayerAt = Date.now();
+      const position = Math.max(0, Math.min(6 * 3600, Number(payload?.position) || 0));
+      room.player = { playing: !!payload?.playing, position, at: Date.now(), episode: room.episode };
+      socket.to(room.code).emit("player:state", { ...room.player, kind: payload?.kind === "tick" ? "tick" : "event" });
+    };
+    socket.on("player:state", (payload) => {
+      const wait = lastPlayerAt + 200 - Date.now();
+      if (wait <= 0 && !pendingPlayer) return relayPlayer(payload);
+      const kind = pendingPlayer?.payload?.kind === "event" || payload?.kind !== "tick" ? "event" : "tick";
+      if (pendingPlayer) clearTimeout(pendingPlayer.timer);
+      // The position is the host's at sending time: shift it by the delay when playing.
+      const sentAt = Date.now();
+      const timer = setTimeout(() => {
+        const p = pendingPlayer?.payload;
+        pendingPlayer = null;
+        if (p) relayPlayer({ ...p, position: (Number(p.position) || 0) + (p.playing ? (Date.now() - p.sentAt) / 1000 : 0) });
+      }, Math.max(0, wait));
+      pendingPlayer = { payload: { ...payload, kind, sentAt }, timer };
     });
 
     socket.on("time:ping", (_payload, ack = () => undefined) => ack({ serverTime: Date.now() }));

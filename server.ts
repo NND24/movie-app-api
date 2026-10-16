@@ -2,6 +2,7 @@ import { app } from "./app";
 import connectDB from "./utils/connectDB";
 import { startReleaseChecker } from "./utils/releaseChecker";
 import { attachWatchParty } from "./utils/watchParty";
+import { startArchiveSync } from "./utils/archiveSync";
 require("dotenv").config();
 import { v2 as cloudinary } from "cloudinary";
 
@@ -23,6 +24,9 @@ const server = app.listen(PORT, () => {
 
 // New episodes / chapters of followed titles -> push notifications.
 startReleaseChecker();
+
+// Internet Archive films into the movie catalog.
+startArchiveSync();
 
 // "Xem cùng nhau" rooms (socket.io on the same port).
 attachWatchParty(server);
