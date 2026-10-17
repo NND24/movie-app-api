@@ -15,12 +15,21 @@ export interface CommentReport {
   createdAt: Date;
 }
 
-// A comment on a movie, optionally on one episode. Replies point to their top-level comment via `parent`.
+export const COMMENT_KINDS = ["movie", "manga"] as const;
+export type CommentKind = (typeof COMMENT_KINDS)[number];
+
+// A comment on a movie or a manga, optionally on one episode (chapter). Replies point to their
+// top-level comment via `parent`.
 export interface MovieComment extends Document {
   _id: mongoose.Types.ObjectId;
+  // Comments from before manga support have no kind: they are movie comments.
+  kind: CommentKind;
+  // Movie slug, or MangaDex manga id.
   slug: string;
-  // Episode name as in the episode list ("1", "Full"...); "" = the whole movie.
+  // Episode name as in the episode list ("1", "Full"...), or MangaDex chapter id; "" = the whole movie/manga.
   episode: string;
+  // Chapter name shown for manga comments ("Chương 12"), since a chapter id says nothing; "" for movies.
+  episodeLabel: string;
   user: mongoose.Types.ObjectId;
   content: string;
   spoiler: boolean;
@@ -45,8 +54,10 @@ const reportSchema = new Schema<CommentReport>(
 
 const movieCommentSchema = new Schema<MovieComment>(
   {
+    kind: { type: String, enum: COMMENT_KINDS, default: "movie" },
     slug: { type: String, required: true },
     episode: { type: String, default: "" },
+    episodeLabel: { type: String, default: "" },
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     content: { type: String, required: true, maxlength: 1000 },
     spoiler: { type: Boolean, default: false },

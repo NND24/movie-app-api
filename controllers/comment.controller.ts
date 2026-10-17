@@ -4,6 +4,7 @@ import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
 import movieModel from "../models/movie.model";
 import movieCommentModel, {
+  CommentKind,
   HIDE_AFTER_REPORTS,
   MovieComment,
   REPORT_REASONS,
@@ -20,6 +21,9 @@ const USER_FIELDS = "_id name avatar role";
 
 const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 const isId = (value: unknown): value is string => typeof value === "string" && mongoose.isValidObjectId(value);
+const kindOf = (value: unknown): CommentKind => (value === "manga" ? "manga" : "movie");
+// Movie comments include the older ones saved without a kind.
+const kindFilter = (kind: CommentKind) => (kind === "manga" ? "manga" : { $ne: "manga" });
 
 type Viewer = { id: string; admin: boolean } | null;
 
@@ -61,8 +65,10 @@ const serialize = (c: any, viewer: Viewer) => {
   const reports: any[] = c.reports || [];
   return {
     _id: String(c._id),
+    kind: kindOf(c.kind),
     slug: c.slug,
     episode: c.episode || "",
+    episodeLabel: c.episodeLabel || "",
     parent: c.parent ? String(c.parent) : null,
     user: c.user?._id
       ? { _id: userId, name: c.user.name, avatar: c.user.avatar, role: c.user.role }
@@ -80,18 +86,20 @@ const serialize = (c: any, viewer: Viewer) => {
   };
 };
 
-// GET /comments/:slug?episode=&sort=top|new&limit=
-// episode: omitted = all comments of the movie, "" (episode=) = whole-movie comments only.
+// GET /comments/:slug?kind=movie|manga&episode=&sort=top|new&limit=
+// slug: movie slug or manga id. episode: omitted = all comments, "" (episode=) = whole-movie/manga comments only.
 export const listComments = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
     const slug = text(req.params.slug, 200);
     if (!slug) return next(new ErrorHandler("Movie slug is required", 400));
-    await migrateLegacyComments(slug);
+    const kind = kindOf(req.query.kind);
+    if (kind === "movie") await migrateLegacyComments(slug);
 
     const viewer = viewerOf(req);
     const sort = req.query.sort === "new" ? "new" : "top";
     const limit = Math.min(PAGE_LIMIT_MAX, Math.max(1, Number(req.query.limit) || 10));
-    const filter: Record<string, unknown> = { slug, parent: null };
+    const base = { slug, kind: kindFilter(kind), parent: null };
+    const filter: Record<string, unknown> = { ...base };
     if (typeof req.query.episode === "string") filter.episode = text(req.query.episode, 50);
 
     const [items, total, byEpisode] = await Promise.all([
@@ -102,7 +110,10 @@ export const listComments = CatchAsyncError(async (req: Request, res: Response, 
         .populate("user", USER_FIELDS)
         .lean(),
       movieCommentModel.countDocuments(filter),
-      movieCommentModel.aggregate([{ $match: { slug, parent: null } }, { $group: { _id: "$episode", count: { $sum: 1 } } }]),
+      movieCommentModel.aggregate([
+        { $match: base },
+        { $group: { _id: "$episode", count: { $sum: 1 }, label: { $max: "$episodeLabel" } } },
+      ]),
     ]);
 
     const replies = items.length
@@ -119,7 +130,11 @@ export const listComments = CatchAsyncError(async (req: Request, res: Response, 
     });
 
     const episodes: Record<string, number> = {};
-    byEpisode.forEach((e: { _id: string; count: number }) => (episodes[e._id || ""] = e.count));
+    const episodeLabels: Record<string, string> = {};
+    byEpisode.forEach((e: { _id: string; count: number; label?: string }) => {
+      episodes[e._id || ""] = e.count;
+      if (e.label) episodeLabels[e._id || ""] = e.label;
+    });
 
     res.json({
       comments: items.map((c) => ({ ...serialize(c, viewer), replies: repliesByParent.get(String(c._id)) || [] })),
@@ -127,6 +142,8 @@ export const listComments = CatchAsyncError(async (req: Request, res: Response, 
       hasMore: total > items.length,
       // Top-level comment count per episode ("" = whole movie).
       episodes,
+      // Chapter names of manga comments, by chapter id.
+      episodeLabels,
       totalAll: Object.values(episodes).reduce((a, b) => a + b, 0),
     });
   } catch (error: any) {
@@ -134,10 +151,11 @@ export const listComments = CatchAsyncError(async (req: Request, res: Response, 
   }
 });
 
-// POST /comments { slug, episode?, content, spoiler?, parentId? }
+// POST /comments { kind?, slug, episode?, episodeLabel?, content, spoiler?, parentId? }
 export const createComment = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return next(new ErrorHandler("User not found in request", 400));
+    const kind = kindOf(req.body.kind);
     const slug = text(req.body.slug, 200);
     const content = text(req.body.content, MAX_LENGTH + 1);
     if (!slug) return next(new ErrorHandler("Movie slug is required", 400));
@@ -153,16 +171,19 @@ export const createComment = CatchAsyncError(async (req: Request, res: Response,
     let parent: MovieComment | null = null;
     if (req.body.parentId) {
       if (!isId(req.body.parentId)) return next(new ErrorHandler("Invalid comment id", 400));
-      parent = await movieCommentModel.findOne({ _id: req.body.parentId, slug });
+      parent = await movieCommentModel.findOne({ _id: req.body.parentId, slug, kind: kindFilter(kind) });
       if (!parent) return next(new ErrorHandler("Bình luận gốc không còn tồn tại", 404));
       // Replies stay one level deep: answering a reply joins its thread.
       if (parent.parent) parent = await movieCommentModel.findById(parent.parent);
       if (!parent) return next(new ErrorHandler("Bình luận gốc không còn tồn tại", 404));
     }
 
+    const episode = parent ? parent.episode : text(req.body.episode, 50);
     const created = await movieCommentModel.create({
+      kind,
       slug,
-      episode: parent ? parent.episode : text(req.body.episode, 50),
+      episode,
+      episodeLabel: kind === "manga" && episode ? (parent ? parent.episodeLabel : text(req.body.episodeLabel, 100)) : "",
       user,
       content,
       spoiler: !!req.body.spoiler,

@@ -54,6 +54,7 @@ export const getAdminStats = CatchAsyncError(async (_req: Request, res: Response
         dailyCounts(userModel, since),
         dailyCounts(movieCommentModel, since),
         movieCommentModel.aggregate([
+          { $match: { kind: { $ne: "manga" } } },
           { $group: { _id: "$slug", count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $limit: 8 },
@@ -238,8 +239,10 @@ export const listComments = CatchAsyncError(async (req: Request, res: Response, 
     res.json({
       comments: items.map((c: any) => ({
         _id: String(c._id),
+        kind: c.kind === "manga" ? "manga" : "movie",
         slug: c.slug,
         episode: c.episode || "",
+        episodeLabel: c.episodeLabel || "",
         parent: c.parent ? String(c.parent) : null,
         content: c.content,
         spoiler: !!c.spoiler,
