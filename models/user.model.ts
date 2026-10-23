@@ -33,7 +33,10 @@ export interface User extends Document {
   _id: string;
   name: string;
   email: string;
+  // Empty for accounts created with Google.
   password: string;
+  // Google account id ("sub"), set once the user signs in with Google.
+  googleId?: string;
   avatar: {
     public_id: string;
     url: string;
@@ -113,6 +116,7 @@ const userSchema: Schema<User> = new mongoose.Schema(
       minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
+    googleId: { type: String, index: { unique: true, sparse: true } },
     avatar: {
       public_id: String,
       url: String,

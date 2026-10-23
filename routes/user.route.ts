@@ -8,7 +8,7 @@ import {
   handleRefreshToken,
   handleRegister,
   removeFollowedMovie,
-  socialAuth,
+  googleAuth,
   updateAvatar,
   updatePassword,
   updateUserInfo,
@@ -29,7 +29,7 @@ userRouter.post("/login", handleLogin);
 userRouter.get("/logout", isAuthenticated, handleLogout);
 userRouter.get("/refresh", handleRefreshToken);
 userRouter.get("/:id", isAuthenticated, getUserInfo);
-userRouter.post("/social-auth", socialAuth);
+userRouter.post("/google-auth", googleAuth);
 userRouter.put("/update-user-info", isAuthenticated, updateUserInfo);
 userRouter.put("/update-user-password", isAuthenticated, updatePassword);
 userRouter.put("/update-user-avatar", isAuthenticated, updateAvatar);

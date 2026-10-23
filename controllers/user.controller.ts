@@ -4,6 +4,7 @@ import { CatchAsyncError } from "../middlewares/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
 import userModel, { User } from "../models/user.model";
 import jwt from "jsonwebtoken";
+import { OAuth2Client, TokenPayload } from "google-auth-library";
 import cloudinary from "cloudinary";
 import { sendUser } from "./manga.controller";
 
@@ -41,9 +42,50 @@ interface LoginRequest {
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET as string;
 const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET as string;
 
+// Signs the user in: a short-lived access token in the body, a rotated refresh token in the
+// httpOnly "jwt" cookie. Shared by the password and Google logins.
+const startSession = async (req: Request, res: Response, user: User) => {
+  const cookies = req.cookies;
+  const accessToken = jwt.sign({ id: user._id }, accessTokenSecret, { expiresIn: "5m" });
+  const newRefreshToken = jwt.sign({ id: user._id }, refreshTokenSecret, { expiresIn: "24h" });
+
+  let newRefreshTokenArray = !cookies?.jwt ? user.refreshToken : user.refreshToken.filter((rt) => rt !== cookies.jwt);
+
+  if (cookies?.jwt) {
+    // A cookie that belongs to nobody means it was reused after rotation: drop every session.
+    const foundToken = await userModel.findOne({ refreshToken: cookies.jwt }).exec();
+    if (!foundToken) newRefreshTokenArray = [];
+    res.clearCookie("jwt", { httpOnly: true, sameSite: "none", secure: true });
+  }
+
+  user.refreshToken = [...newRefreshTokenArray, newRefreshToken];
+  await user.save();
+
+  res.cookie("jwt", newRefreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+
+  res.status(200).json({
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      role: user.role,
+      followedMovie: user.followedMovie,
+      history: user.history,
+      followedManga: user.followedManga,
+      mangaHistory: user.mangaHistory,
+    },
+    accessToken,
+  });
+};
+
 export const handleLogin = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const cookies = req.cookies;
     const { email, password } = req.body as LoginRequest;
 
     if (!email || !password) {
@@ -56,63 +98,20 @@ export const handleLogin = CatchAsyncError(async (req: Request, res: Response, n
       return next(new ErrorHandler("Invalid email or password", 400));
     }
 
+    // Accounts created with Google have no password.
+    if (!user.password) {
+      return next(new ErrorHandler("Tài khoản này được tạo bằng Google. Hãy chọn “Đăng nhập với Google”.", 400));
+    }
+
     const isCorrectPass = await user.comparedPassword(password);
 
     if (!isCorrectPass) {
       return next(new ErrorHandler("Invalid email or password", 400));
-    } else if (user.banned) {
-      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
-    } else {
-      const accessToken = jwt.sign(
-        {
-          id: user._id,
-        },
-        accessTokenSecret,
-        { expiresIn: "5m" }
-      );
-
-      const newRefreshToken = jwt.sign({ id: user._id }, refreshTokenSecret, { expiresIn: "24h" });
-
-      let newRefreshTokenArray = !cookies?.jwt
-        ? user.refreshToken
-        : user.refreshToken.filter((rt) => rt !== cookies.jwt);
-
-      if (cookies?.jwt) {
-        const refreshToken = cookies.jwt;
-        const foundToken = await userModel.findOne({ refreshToken }).exec();
-
-        if (!foundToken) {
-          newRefreshTokenArray = [];
-        }
-
-        res.clearCookie("jwt", { httpOnly: true, sameSite: "none", secure: true });
-      }
-
-      user.refreshToken = [...newRefreshTokenArray, newRefreshToken];
-      await user.save();
-
-      res.cookie("jwt", newRefreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-
-      res.status(200).json({
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          role: user.role,
-          followedMovie: user.followedMovie,
-          history: user.history,
-          followedManga: user.followedManga,
-          mangaHistory: user.mangaHistory,
-        },
-        accessToken,
-      });
     }
+    if (user.banned) {
+      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
+    }
+    await startSession(req, res, user);
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
   }
@@ -210,115 +209,72 @@ export const handleLogout = CatchAsyncError(async (req: Request, res: Response, 
   }
 });
 
-interface SocialAuthBody {
-  email: string;
-  name: string;
-  avatar: string;
-}
+// Client ids allowed to sign in with Google (comma separated: web, and later the mobile apps).
+const googleClientIds = (process.env.GOOGLE_CLIENT_ID || "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+const googleClient = new OAuth2Client();
+// Exchanges the authorization code from the web's popup ("postmessage" is the redirect URI of
+// popup codes) for tokens; needs the web client's secret.
+const googleCodeClient = () =>
+  new OAuth2Client(googleClientIds[0], (process.env.GOOGLE_CLIENT_SECRET || "").trim(), "postmessage");
 
-export const socialAuth = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// POST /google-auth { code } (web: authorization code from the Google popup)
+//                or { credential } (an ID token, e.g. from a native Google sign-in).
+// The ID token is verified with Google (signature, audience, expiry) before anything in it is trusted.
+export const googleAuth = CatchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const cookies = req.cookies;
-    const { email, name, avatar } = req.body as SocialAuthBody;
-    const user = await userModel.findOne({ email });
-    if (!user) {
-      const newUser = await userModel.create({ email, name, avatar });
-      const accessToken = jwt.sign(
-        {
-          id: newUser._id,
-        },
-        accessTokenSecret,
-        { expiresIn: "5m" }
-      );
-      const newRefreshToken = jwt.sign({ id: newUser._id }, refreshTokenSecret, { expiresIn: "24h" });
-
-      let newRefreshTokenArray = !cookies?.jwt
-        ? newUser.refreshToken
-        : newUser.refreshToken.filter((rt) => rt !== cookies.jwt);
-
-      if (cookies?.jwt) {
-        const refreshToken = cookies.jwt;
-        const foundToken = await userModel.findOne({ refreshToken }).exec();
-
-        if (!foundToken) {
-          newRefreshTokenArray = [];
-        }
-
-        res.clearCookie("jwt", { httpOnly: true, sameSite: "none", secure: true });
-      }
-
-      newUser.refreshToken = [...newRefreshTokenArray, newRefreshToken];
-      const result = await newUser.save();
-
-      res.cookie("jwt", newRefreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-
-      res.status(200).json({
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        avatar: newUser.avatar,
-        role: newUser.role,
-        followedMovie: newUser.followedMovie,
-        history: newUser.history,
-        followedManga: newUser.followedManga,
-        mangaHistory: newUser.mangaHistory,
-        accessToken,
-      });
-    } else if (user.banned) {
-      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
-    } else {
-      const accessToken = jwt.sign(
-        {
-          id: user._id,
-        },
-        accessTokenSecret,
-        { expiresIn: "5m" }
-      );
-      const newRefreshToken = jwt.sign({ id: user._id }, refreshTokenSecret, { expiresIn: "24h" });
-
-      let newRefreshTokenArray = !cookies?.jwt
-        ? user.refreshToken
-        : user.refreshToken.filter((rt) => rt !== cookies.jwt);
-
-      if (cookies?.jwt) {
-        const refreshToken = cookies.jwt;
-        const foundToken = await userModel.findOne({ refreshToken }).exec();
-
-        if (!foundToken) {
-          newRefreshTokenArray = [];
-        }
-
-        res.clearCookie("jwt", { httpOnly: true, sameSite: "none", secure: true });
-      }
-
-      user.refreshToken = [...newRefreshTokenArray, newRefreshToken];
-      const result = await user.save();
-
-      res.cookie("jwt", newRefreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-
-      res.status(200).json({
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        role: user.role,
-        followedMovie: user.followedMovie,
-        history: user.history,
-        followedManga: user.followedManga,
-        mangaHistory: user.mangaHistory,
-        accessToken,
-      });
+    if (!googleClientIds.length) {
+      return next(new ErrorHandler("Google login is not configured (GOOGLE_CLIENT_ID)", 500));
     }
+    const { code, credential } = req.body || {};
+    if ((typeof code !== "string" || !code) && (typeof credential !== "string" || !credential)) {
+      return next(new ErrorHandler("Missing Google credential", 400));
+    }
+
+    let payload: TokenPayload | undefined;
+    try {
+      let idToken = credential as string | undefined;
+      if (typeof code === "string" && code) {
+        const { tokens } = await googleCodeClient().getToken(code);
+        idToken = tokens.id_token || undefined;
+      }
+      if (!idToken) throw new Error("No ID token");
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientIds });
+      payload = ticket.getPayload();
+    } catch {
+      return next(new ErrorHandler("Phiên đăng nhập Google không hợp lệ, vui lòng thử lại.", 401));
+    }
+    if (!payload?.sub || !payload.email || !payload.email_verified) {
+      return next(new ErrorHandler("Tài khoản Google này chưa xác minh email.", 400));
+    }
+
+    const email = payload.email.toLowerCase();
+    // Known Google account first, then an existing account with the same (verified) email.
+    let user =
+      (await userModel.findOne({ googleId: payload.sub })) ||
+      (await userModel.findOne({ email: new RegExp(`^${escapeRegex(email)}$`, "i") }));
+
+    if (!user) {
+      user = await userModel.create({
+        name: payload.name || email.split("@")[0],
+        email,
+        googleId: payload.sub,
+        avatar: { public_id: "", url: payload.picture || "" },
+      });
+    } else {
+      if (!user.googleId) user.googleId = payload.sub;
+      if (!user.avatar?.url && payload.picture) user.avatar = { public_id: "", url: payload.picture };
+    }
+
+    if (user.banned) {
+      await user.save();
+      return next(new ErrorHandler(bannedMessage(user.bannedReason), 423));
+    }
+    await startSession(req, res, user);
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 400));
   }
@@ -402,8 +358,11 @@ export const updatePassword = CatchAsyncError(async (req: Request, res: Response
 
     const user = await userModel.findById(req.user?._id).select("+password");
 
-    if (user?.password === undefined) {
+    if (!user) {
       return next(new ErrorHandler("Invalid user", 400));
+    }
+    if (!user.password) {
+      return next(new ErrorHandler("Tài khoản đăng nhập bằng Google không có mật khẩu để đổi.", 400));
     }
 
     const isCorrectPass = await user.comparedPassword(oldPassword);
